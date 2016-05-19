@@ -1,0 +1,217 @@
+<html>
+  <head>
+    <script src="//d3js.org/d3.v3.min.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Municipal Metrics and Forecasting</title>
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
+  </head>
+  <style>
+    body {
+      font-family: 'Open Sans', sans-serif;
+      font-size: 12px;}
+    .Category{
+      font-weight: bolder;
+      stroke-width:0.5;
+      font-size: 15px;
+    }
+    #revenues{
+      fill:darkgreen;
+      cursor: pointer;
+    }
+    #expenditures{
+      fill:navy;
+      cursor: pointer;
+    }
+    #negative{
+      fill:red;
+    }
+    .ColumnHead{
+      font-weight: bolder;
+      stroke: black;
+      stroke-width:0.5;
+      font-size: 15px;
+    }
+    .horizontalGraphLine{
+      stroke: grey;
+      stroke-width: 2;
+    }
+    .textBox{
+      fill:none;
+      stroke: grey;
+      stroke-width: 2;
+    }
+    .verticalGraphLine{
+      stroke: grey;
+      stroke-width: 1;
+    }
+    .incrementer{
+      fill: lightgrey;
+      stroke: none;
+      cursor: pointer;
+    }
+    .decrementer{
+      fill: grey;
+      stroke: none;
+      cursor: pointer;
+    }
+    .buttonLabel{
+      font-weight: bolder;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+      shape-rendering: crispEdges;
+    }
+    .area.above {
+      fill: firebrick;
+    }
+
+    .area.below {
+      fill: slategrey;
+    }
+
+    .line {
+      fill: none;
+      stroke: #000;
+      stroke-width: 1.5px;
+    }
+  </style>
+  <body>
+    <div class="wrapper">
+      <div class="scenarios"></div>
+      <div class="output">
+        <div class="graph"></div>
+        <div class="pivot"></div>
+      </div>
+    </div>
+    <script src="parseAll.js"></script>
+    <script src="drawAll.js"></script>
+    <script type="text/javascript">
+//Global Variables
+      //First Level Data Arrays
+      var expenditures = [],
+          revenues = [];
+      var expenditureButtons = [],
+          revenueButtons = [];
+      //Second Level Data Arrays
+      var graphData = [];
+      //Initial Value of Cutoff Date
+      var initialValue = 2026;
+      var cutoff;
+//Generate Usable Data
+      function makeLevel2Arrays(data, bArray, fund, cut){
+        var fundIndex = 0;
+        var row = [];
+        if (fund == "expenditures"){
+          fundIndex = 1;
+        }
+        for(var i = 0; i < data[0].length; i++){
+          var amountValue = 0;
+          for (var j = 0; j < data.length; j++){
+            amountValue += data[j][i].amount;
+          }
+          row.push({
+            category: fund,
+            identifier: fund,
+            fiscalYear: data[0][i].fiscalYear,
+            amount: amountValue,
+            index: (fundIndex*data[0].length)+i,
+            xCoord: i+1,
+            yCoord: fundIndex
+          });
+        }
+        graphData[fundIndex] = row;
+        if (graphData.length != 1){
+          row = [];
+          for(var j = 0; j < graphData[0].length; j++){
+            var checkRev = graphData[0][j].amount;
+            var checkExp = graphData[1][j].amount
+            row.push({
+              category: "Balance",
+              identifier: "Balance",
+              fiscalYear: graphData[0][j].fiscalYear,
+              amount: checkRev-checkExp,
+              index: (2*data[0].length)+j,
+              xCoord: j+1,
+              yCoord: 2
+            });
+          }
+          graphData[2] = row;
+          var tableData = graphData;
+          pivotControl(tableData, "total");
+          // graph(graphData, "total", bArray, cut);
+        }
+      }
+//Data Updating Function (From Table)
+      function updateLevel2Arrays(fund, data){
+        var row = [];
+        var fundIndex = 0;
+        var fundLength = revenues.length;
+        var pivotedFundArray;
+        var pivotButtons = revenueButtons;
+        if (fund == "expenditures"){
+          fundIndex = 1;
+          fundLength = expenditures.length + 1;
+          pivotButtons = expenditureButtons;
+        }
+        pivotedFundArray = data.slice(fundIndex, fundLength);
+        for(var i = 0; i < pivotedFundArray.length; i++){
+          var columnKey = 2016;
+          for(var k = 0; k < data[0].length; k++){
+            if(k >= 3){
+              pivotedFundArray[i][k].amount = pivotedFundArray[i][k-1].amount * (1+((pivotButtons[((i)*10)+(k-3)].value)/100));
+            }
+          }
+        }
+        graphData.pop();
+        for (var i = 0; i < pivotedFundArray[0].length; i ++) {
+          var amountValue = 0;
+          for (var j = 0; j < pivotedFundArray.length; j++){
+            amountValue += pivotedFundArray[j][i].amount;
+          }
+          row.push({
+            category: fund,
+            identifier: fund,
+            fiscalYear: pivotedFundArray[0][i].fiscalYear,
+            amount: amountValue,
+            index: (fundIndex*pivotedFundArray[0].length)+i,
+            xCoord: i+1,
+            yCoord: fundIndex
+          });
+        }
+        graphData[fundIndex] = row;
+        row = [];
+        for (var i = 0; i < graphData[0].length; i++){
+          row.push({
+            category: "Balance",
+            identifier: "Balance",
+            fiscalYear: pivotedFundArray[0][i].fiscalYear,
+            amount: (graphData[0][i].amount) - (graphData[1][i].amount),
+            index: (2*pivotedFundArray[0].length)+i,
+            xCoord: i+1,
+            yCoord: 2
+          });
+        }
+        graphData[2] = row;
+        var tableData = graphData;
+        pivotControl(tableData, fund);
+      }
+
+//Data Parsing Function
+      function initializeParsing (cut){
+        cutoff = cut;
+        twoStepParse("CA_GeneralFund_Projection.csv", "revenues", revenueButtons, cut);
+        twoStepParse("CA_GeneralFund_Projection.csv", "expenditures", expenditureButtons, cut);
+      }
+//Capitalize Function Redefine
+      String.prototype.capitalize = function(lower) {
+      return (lower ? this.toLowerCase() : this).replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
+      };
+//InitialCall
+      initializeParsing (initialValue);
+    </script>
+  </body>
